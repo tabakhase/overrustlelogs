@@ -123,30 +123,38 @@ func (d *Debugger) WatchHandle(name string, f http.HandlerFunc) http.HandlerFunc
 	var ct, ca int64
 	d.counters[name+"_total"] = &ct
 	d.counters[name+"_active"] = &ca
+	var cs int64
+	d.counters[name+"_since"] = &cs  // reset on stdout reporting by Debugger
 	return func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt64(d.counters[name+"_total"], +1)
 		atomic.AddInt64(d.counters[name+"_active"], +1)
+		atomic.AddInt64(d.counters[name+"_since"], +1)
 		f.ServeHTTP(w, r)
 		atomic.AddInt64(d.counters[name+"_active"], -1)
 	}
 }
 
-func (d *Debugger) counts() map[string]int64 {
+func (d *Debugger) countsFetch(toreset string) map[string]int64 {
 	counts := make(map[string]int64)
 	for name, c := range d.counters {
 		counts[name] = atomic.LoadInt64(c)
+		if (toreset != "" && strings.HasSuffix(name, "_"+toreset)) {
+			var r int64
+			r -= counts[name]
+			atomic.AddInt64(c, r)
+		}
 	}
 	return counts
 }
 
 // DebugPrint ...
 func (d *Debugger) DebugPrint() {
-	log.Println(d.counts())
+	log.Println(d.countsFetch("since"))
 }
 
 // HTTPHandle serve debugger status as JSON
 func (d *Debugger) HTTPHandle(w http.ResponseWriter, r *http.Request) {
-	b, _ := json.Marshal(d.counts())
+	b, _ := json.Marshal(d.countsFetch(""))
 	w.Write(b)
 }
 
