@@ -89,6 +89,8 @@ func main() {
 	r.HandleFunc("/{channel:[a-zA-Z0-9_-]+ chatlog}/{month:[a-zA-Z]+ [0-9]{4}}/subscribers", d.WatchHandle("Subscriber", SubscriberHandle)).Methods("GET")
 	r.HandleFunc("/api/v1/stalk/{channel:[a-zA-Z0-9_-]+ chatlog}/{nick:[a-zA-Z0-9_-]+}.json", d.WatchHandle("Stalk", StalkHandle)).Queries("limit", "{limit:[0-9]+}").Methods("GET")
 	r.HandleFunc("/api/v1/status.json", d.WatchHandle("Debug", d.HTTPHandle))
+	r.HandleFunc("/api/v1/stats/server.json", d.WatchHandle("Debug_stats-server", d.HTTPHandleStatsServer)).Queries("recent", "{recent:(0|1|true|false)+}").Methods("GET")
+	r.HandleFunc("/api/v1/stats/server.json", d.WatchHandle("Debug_stats-server", d.HTTPHandleStatsServer)).Methods("GET")
 	r.NotFoundHandler = http.HandlerFunc(NotFoundHandle)
 	go http.ListenAndServe(common.GetConfig().Server.Address, r)
 
@@ -123,12 +125,14 @@ func (d *Debugger) WatchHandle(name string, f http.HandlerFunc) http.HandlerFunc
 	var ct, ca int64
 	d.counters[name+"_total"] = &ct
 	d.counters[name+"_active"] = &ca
-	var cs int64
+	var cs, cr int64
 	d.counters[name+"_since"] = &cs  // reset on stdout reporting by Debugger
+	d.counters[name+"_recent"] = &cr // reset on HTTP /api/v1/stats/server.json?recent=1
 	return func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt64(d.counters[name+"_total"], +1)
 		atomic.AddInt64(d.counters[name+"_active"], +1)
 		atomic.AddInt64(d.counters[name+"_since"], +1)
+		atomic.AddInt64(d.counters[name+"_recent"], +1)
 		f.ServeHTTP(w, r)
 		atomic.AddInt64(d.counters[name+"_active"], -1)
 	}
@@ -150,6 +154,20 @@ func (d *Debugger) countsFetch(toreset string) map[string]int64 {
 // DebugPrint ...
 func (d *Debugger) DebugPrint() {
 	log.Println(d.countsFetch("since"))
+}
+
+func (d *Debugger) HTTPHandleStatsServer(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	resetrecent, err := strconv.ParseBool(vars["recent"])
+	if err != nil {
+		resetrecent = false
+	}
+	var toreset string
+	if resetrecent {
+		toreset = "recent"
+	}
+	b, _ := json.Marshal(d.countsFetch(toreset))
+	w.Write(b)
 }
 
 // HTTPHandle serve debugger status as JSON
