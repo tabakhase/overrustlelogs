@@ -120,12 +120,14 @@ func NewDebugger() *Debugger {
 
 // WatchHandle ...
 func (d *Debugger) WatchHandle(name string, f http.HandlerFunc) http.HandlerFunc {
-	var c int64
-	d.counters[name] = &c
+	var ct, ca int64
+	d.counters[name+"_total"] = &ct
+	d.counters[name+"_active"] = &ca
 	return func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt64(&c, 1)
+		atomic.AddInt64(d.counters[name+"_total"], +1)
+		atomic.AddInt64(d.counters[name+"_active"], +1)
 		f.ServeHTTP(w, r)
-		atomic.AddInt64(&c, -1)
+		atomic.AddInt64(d.counters[name+"_active"], -1)
 	}
 }
 
