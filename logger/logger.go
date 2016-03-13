@@ -33,6 +33,13 @@ func main() {
 	})
 	go tc.Run()
 
+	tcl := common.NewTwitchLegacyChat(func(ch string, m chan *common.Message) {
+		log.Printf("started logging legacy %s", ch)
+		NewTwitchLogger(logs, ch).Log(m)
+		log.Printf("stopped logging legacy %s", ch)
+	})
+	go tcl.Run()
+
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
 	select {
