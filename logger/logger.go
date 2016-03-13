@@ -37,7 +37,7 @@ func main() {
 		log.Printf("started logging legacy %s", ch)
 		NewTwitchLogger(logs, ch).Log(m)
 		log.Printf("stopped logging legacy %s", ch)
-	})
+	}, tc)
 	go tcl.Run()
 
 	sigint := make(chan os.Signal, 1)

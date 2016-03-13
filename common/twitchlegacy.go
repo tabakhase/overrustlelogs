@@ -34,13 +34,14 @@ type TwitchLegacyChat struct {
 	writeLock   sync.Mutex
 	joinHandler TwitchLegacyJoinHandler
 	admins      map[string]bool
+	tc          *TwitchChat
 }
 
 // TwitchLegacyJoinHandler called when joining channels
 type TwitchLegacyJoinHandler func(string, chan *Message)
 
 // NewTwitchLegacyChat new twitch chat client
-func NewTwitchLegacyChat(j TwitchLegacyJoinHandler) *TwitchLegacyChat {
+func NewTwitchLegacyChat(j TwitchLegacyJoinHandler, tc *TwitchChat) *TwitchLegacyChat {
 	c := &TwitchLegacyChat{
 		dialer:      websocket.Dialer{HandshakeTimeout: SocketHandshakeTimeout},
 		headers:     http.Header{"Origin": []string{"http://irc.twitch.tv"}},
@@ -48,6 +49,7 @@ func NewTwitchLegacyChat(j TwitchLegacyJoinHandler) *TwitchLegacyChat {
 		channels:    make([]string, 0),
 		joinHandler: j,
 		admins:      make(map[string]bool, len(GetConfig().Twitch.Admins)),
+		tc:          tc,
 	}
 
 	for _, u := range GetConfig().Twitch.Admins {
@@ -163,7 +165,11 @@ func (c *TwitchLegacyChat) runCommand(source string, m *Message) {
 
 		if strings.EqualFold(d[0], "!join") {
 			if err := c.Join(ld[1], false); err == nil {
-				c.send("PRIVMSG #" + source + " :Logging " + ld[1])
+				if err := c.tc.Join(ld[1], false); err == nil {
+					c.send("PRIVMSG #" + source + " :LoggingBC " + ld[1])
+				} else {
+					c.send("PRIVMSG #" + source + " :LoggingLegacy " + ld[1])
+				}
 			} else {
 				if err == ErrChannelLegacyNotValid {
 					c.send("PRIVMSG #" + source + " :Channel doesn't exist!")
